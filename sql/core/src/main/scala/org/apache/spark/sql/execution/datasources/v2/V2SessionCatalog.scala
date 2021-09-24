@@ -24,7 +24,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
-import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException}
+import org.apache.spark.sql.catalyst.analysis.{NamespaceAlreadyExistsException, NoSuchNamespaceException, NoSuchTableException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogDatabase, CatalogTable, CatalogTableType, CatalogUtils, SessionCatalog}
 import org.apache.spark.sql.connector.catalog.{CatalogManager, CatalogV2Util, Identifier, NamespaceChange, SupportsNamespaces, Table, TableCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.catalog.NamespaceChange.RemoveProperty
@@ -60,6 +60,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }
   }
 
+  @throws[NoSuchTableException]
   override def loadTable(ident: Identifier): Table = {
     val catalogTable = try {
       catalog.getTableMetadata(ident.asTableIdentifier)
@@ -75,6 +76,8 @@ class V2SessionCatalog(catalog: SessionCatalog)
     catalog.refreshTable(ident.asTableIdentifier)
   }
 
+  @throws[TableAlreadyExistsException]
+  @throws[NoSuchNamespaceException]
   override def createTable(
       ident: Identifier,
       schema: StructType,
@@ -122,6 +125,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }.toMap
   }
 
+  @throws[NoSuchTableException]
   override def alterTable(
       ident: Identifier,
       changes: TableChange*): Table = {
@@ -173,6 +177,8 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }
   }
 
+  @throws[NoSuchTableException]
+  @throws[TableAlreadyExistsException]
   override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
     if (tableExists(newIdent)) {
       throw QueryCompilationErrors.tableAlreadyExistsError(newIdent)
@@ -201,10 +207,12 @@ class V2SessionCatalog(catalog: SessionCatalog)
       false
   }
 
+  @throws[NoSuchNamespaceException]
   override def listNamespaces(): Array[Array[String]] = {
     catalog.listDatabases().map(Array(_)).toArray
   }
 
+  @throws[NoSuchNamespaceException]
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
     namespace match {
       case Array() =>
@@ -216,6 +224,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }
   }
 
+  @throws[NoSuchNamespaceException]
   override def loadNamespaceMetadata(namespace: Array[String]): util.Map[String, String] = {
     namespace match {
       case Array(db) =>
@@ -226,6 +235,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }
   }
 
+  @throws[NamespaceAlreadyExistsException]
   override def createNamespace(
       namespace: Array[String],
       metadata: util.Map[String, String]): Unit = namespace match {
@@ -241,6 +251,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
       throw QueryExecutionErrors.invalidNamespaceNameError(namespace)
   }
 
+  @throws[NoSuchNamespaceException]
   override def alterNamespace(namespace: Array[String], changes: NamespaceChange*): Unit = {
     namespace match {
       case Array(db) =>
@@ -261,6 +272,7 @@ class V2SessionCatalog(catalog: SessionCatalog)
     }
   }
 
+  @throws[NoSuchNamespaceException]
   override def dropNamespace(namespace: Array[String]): Boolean = namespace match {
     case Array(db) if catalog.databaseExists(db) =>
       if (catalog.listTables(db).nonEmpty) {
