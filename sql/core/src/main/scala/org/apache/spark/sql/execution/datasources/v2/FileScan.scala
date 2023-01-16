@@ -17,17 +17,19 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import java.util.{Locale, OptionalLong}
+
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.IO_WARNING_LARGEFILETHRESHOLD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ExpressionSet}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.PartitionTypeHelper
+import org.apache.spark.sql.connector.expressions.LogicalExpressions.reference
 import org.apache.spark.sql.connector.expressions.filter.Predicate
-import org.apache.spark.sql.connector.expressions.{NamedReference, Transform}
+import org.apache.spark.sql.connector.expressions.NamedReference
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, Scan, Statistics, SupportsReportStatistics, SupportsRuntimeV2Filtering}
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.PartitionedFileUtil
@@ -202,8 +204,7 @@ trait FileScan extends Scan
 
   override def filterAttributes(): Array[NamedReference] = {
     val scanFields = readSchema().fields.map(_.name).toSet
-    fileIndex.partitionSchema.names.toSeq.asTransforms.flatMap(_.references)
-      .filter(ref => scanFields.contains(ref.fieldNames.mkString(".")))
+    fileIndex.partitionSchema.names.filter(scanFields.contains).map(name => reference(Seq(name)))
   }
 
   override def filter(predicates: Array[Predicate]): Unit = {
