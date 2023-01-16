@@ -17,17 +17,18 @@
 package org.apache.spark.sql.execution.datasources.v2
 
 import java.util.{Locale, OptionalLong}
-
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.IO_WARNING_LARGEFILETHRESHOLD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, Expression, ExpressionSet}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.connector.read.{Batch, InputPartition, Scan, Statistics, SupportsReportStatistics}
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.PartitionTypeHelper
+import org.apache.spark.sql.connector.expressions.filter.Predicate
+import org.apache.spark.sql.connector.expressions.{NamedReference, Transform}
+import org.apache.spark.sql.connector.read.{Batch, InputPartition, Scan, Statistics, SupportsReportStatistics, SupportsRuntimeV2Filtering}
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.PartitionedFileUtil
 import org.apache.spark.sql.execution.datasources._
@@ -37,7 +38,8 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
 
 trait FileScan extends Scan
-  with Batch with SupportsReportStatistics with SupportsMetadata with Logging {
+  with Batch with SupportsReportStatistics with SupportsMetadata with SupportsRuntimeV2Filtering
+  with Logging {
   /**
    * Returns whether a file with `path` could be split or not.
    */
@@ -197,6 +199,16 @@ trait FileScan extends Scan
 
   override def readSchema(): StructType =
     StructType(readDataSchema.fields ++ readPartitionSchema.fields)
+
+  override def filterAttributes(): Array[NamedReference] = {
+    val scanFields = readSchema().fields.map(_.name).toSet
+    fileIndex.partitionSchema.names.toSeq.asTransforms.flatMap(_.references)
+      .filter(ref => scanFields.contains(ref.fieldNames.mkString(".")))
+  }
+
+  override def filter(predicates: Array[Predicate]): Unit = {
+    // Use partitioning to figure this out
+  }
 
   // Returns whether the two given arrays of [[Filter]]s are equivalent.
   protected def equivalentFilters(a: Array[Filter], b: Array[Filter]): Boolean = {
